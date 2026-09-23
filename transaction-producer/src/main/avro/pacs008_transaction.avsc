@@ -1,0 +1,44 @@
+{
+  "type": "record",
+  "name": "Pacs008Transaction",
+  "namespace": "com.finstream.model",
+  "doc": "ISO 20022 pacs.008 금융 이체 전문 실시간 스트리밍 스키마",
+  "fields": [
+    {
+      "name": "txId",
+      "type": "string",
+      "doc": "고유 트랜잭션 식별자 (UUID)"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "전문 발생 타임스탬프 (Epoch Milliseconds)"
+    },
+    {
+      "name": "senderAccount",
+      "type": "string",
+      "doc": "출금 계좌 번호 (Kafka 파티셔닝 키)"
+    },
+    {
+      "name": "receiverAccount",
+      "type": "string",
+      "doc": "입금 계좌 번호"
+    },
+    {
+      "name": "amount",
+      "type": "double",
+      "doc": "이체 금액"
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "default": "KRW",
+      "doc": "통화 코드"
+    },
+    {
+      "name": "idempotencyKey",
+      "type": "string",
+      "doc": "멱등성 검증 키"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1' apply false
+}
+
+allprojects {
+    group = 'com.finstream'
+    version = '1.0.0'
+
+    repositories {
+        mavenCentral()
+        maven { url "https://packages.confluent.io/maven/" }
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    tasks.withType(JavaCompile) {
+        options.encoding = 'UTF-8'
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
