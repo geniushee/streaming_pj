@@ -1,0 +1,30 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.davidmc24.gradle.plugin.avro'
+}
+
+dependencies {
+    // producer에서 자동 생성된 Avro 모델(Pacs008Transaction) 참조
+    implementation project(':transaction-producer')
+
+    // Flink Core & Streaming API
+    implementation 'org.apache.flink:flink-streaming-java:1.18.1'
+    implementation 'org.apache.flink:flink-clients:1.18.1'
+    implementation 'org.apache.flink:flink-connector-files:1.18.1'
+
+    // Flink Kafka Connector & Formats
+    implementation 'org.apache.flink:flink-connector-kafka:3.0.2-1.18'
+    implementation 'org.apache.flink:flink-avro-confluent-registry:1.18.1'
+    implementation 'org.apache.flink:flink-parquet:1.18.1'
+    implementation 'org.apache.parquet:parquet-avro:1.13.1'
+
+    // MinIO / S3 연동 FileSystem
+    implementation 'org.apache.flink:flink-s3-fs-hadoop:1.18.1'
+
+    implementation 'org.slf4j:slf4j-simple:2.0.9'
+}
+
+application {
+    mainClass = 'com.finstream.FdsStreamingJob'
+}
