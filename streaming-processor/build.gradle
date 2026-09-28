@@ -19,8 +19,10 @@ dependencies {
     implementation 'org.apache.flink:flink-parquet:1.18.1'
     implementation 'org.apache.parquet:parquet-avro:1.13.1'
 
-    // MinIO / S3 연동 FileSystem
+    // MinIO / S3 연동 FileSystem 및 Parquet Writer용 Hadoop 의존성
     implementation 'org.apache.flink:flink-s3-fs-hadoop:1.18.1'
+    implementation 'org.apache.hadoop:hadoop-common:3.3.6'
+    implementation 'org.apache.hadoop:hadoop-mapreduce-client-core:3.3.6'
 
     implementation 'org.slf4j:slf4j-simple:2.0.9'
 }

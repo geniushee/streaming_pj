@@ -6,6 +6,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.avro.registry.confluent.ConfluentRegistryAvroDeserializationSchema;
 import org.apache.flink.formats.parquet.avro.AvroParquetWriters;
@@ -20,12 +21,26 @@ public class FdsStreamingJob {
 
     public static void main(String[] args) throws Exception {
         Configuration config = new Configuration();
-        // MinIO 연동용 S3A 설정
+        // Flink S3 플러그인 (flink-s3-fs-hadoop) 전용 설정 키
+        config.setString("s3.endpoint", "http://localhost:9000");
+        config.setString("s3.access-key", "admin");
+        config.setString("s3.secret-key", "password123");
+        config.setString("s3.path.style.access", "true");
+
+        // Hadoop S3A 호환 설정 키
         config.setString("fs.s3a.endpoint", "http://localhost:9000");
         config.setString("fs.s3a.access.key", "admin");
         config.setString("fs.s3a.secret.key", "password123");
         config.setString("fs.s3a.path.style.access", "true");
         config.setString("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+        config.setString("fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider");
+
+        // AWS SDK v1 시스템 프로퍼티 Fallback 설정
+        System.setProperty("aws.accessKeyId", "admin");
+        System.setProperty("aws.secretKey", "password123");
+
+        // 로컬 실행 시 Flink 전역 FileSystem에 S3 설정 초기화
+        FileSystem.initialize(config, null);
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(config);
 
