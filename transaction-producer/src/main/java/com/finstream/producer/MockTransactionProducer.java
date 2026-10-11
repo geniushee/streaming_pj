@@ -1,6 +1,8 @@
 package com.finstream.producer;
 
 import com.finstream.model.Pacs008Transaction;
+import com.finstream.producer.config.ProducerAppConfig;
+import com.finstream.producer.config.ProducerConfigLoader;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -22,39 +24,28 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class MockTransactionProducer {
     private static final Logger log = LoggerFactory.getLogger(MockTransactionProducer.class);
 
-    private static final String DEFAULT_TOPIC = "financial.transactions.raw";
-    private static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
-    private static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
-
-    private static final List<String> ACCOUNTS = List.of(
-            "ACCT-KR-1001", "ACCT-KR-1002", "ACCT-KR-1003", "ACCT-KR-1004", "ACCT-KR-1005",
-            "ACCT-KR-1006", "ACCT-KR-1007", "ACCT-KR-1008", "ACCT-KR-1009", "ACCT-KR-1010"
-    );
-
     private static final Random RANDOM = new Random();
     private static final NumberFormat CURRENCY_FORMAT = NumberFormat.getNumberInstance(Locale.KOREA);
 
     public static void main(String[] args) {
-        String topic = System.getenv().getOrDefault("TOPIC_NAME", DEFAULT_TOPIC);
-        String bootstrapServers = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", DEFAULT_BOOTSTRAP_SERVERS);
-        String schemaRegistryUrl = System.getenv().getOrDefault("SCHEMA_REGISTRY_URL", DEFAULT_SCHEMA_REGISTRY_URL);
+        ProducerAppConfig appConfig = ProducerConfigLoader.load(args);
+        ProducerAppConfig.KafkaProducerConfig kafkaConfig = appConfig.getKafka();
+        ProducerAppConfig.GeneratorConfig genConfig = appConfig.getGenerator();
 
-        log.info("Starting MockTransactionProducer...");
-        log.info("Target Topic: {}", topic);
-        log.info("Bootstrap Servers: {}", bootstrapServers);
-        log.info("Schema Registry: {}", schemaRegistryUrl);
+        log.info("Starting MockTransactionProducer with topic: {}, servers: {}",
+                kafkaConfig.getTopic(), kafkaConfig.getBootstrapServers());
 
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaConfig.getBootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class.getName());
-        props.put("schema.registry.url", schemaRegistryUrl);
+        props.put("schema.registry.url", kafkaConfig.getSchemaRegistryUrl());
 
         // 금융 트랜잭션 전송 신뢰성 보장 옵션
-        props.put(ProducerConfig.ACKS_CONFIG, "all");
-        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
-        props.put(ProducerConfig.RETRIES_CONFIG, 3);
-        props.put(ProducerConfig.LINGER_MS_CONFIG, 20);
+        props.put(ProducerConfig.ACKS_CONFIG, kafkaConfig.getAcks());
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, String.valueOf(kafkaConfig.isEnableIdempotence()));
+        props.put(ProducerConfig.RETRIES_CONFIG, kafkaConfig.getRetries());
+        props.put(ProducerConfig.LINGER_MS_CONFIG, kafkaConfig.getLingerMs());
 
         KafkaProducer<String, Pacs008Transaction> producer = new KafkaProducer<>(props);
         AtomicBoolean running = new AtomicBoolean(true);
@@ -70,11 +61,11 @@ public class MockTransactionProducer {
         long count = 0;
         try {
             while (running.get()) {
-                Pacs008Transaction transaction = generateMockTransaction();
+                Pacs008Transaction transaction = generateMockTransaction(genConfig);
                 String partitionKey = transaction.getSenderAccount();
 
                 ProducerRecord<String, Pacs008Transaction> record =
-                        new ProducerRecord<>(topic, partitionKey, transaction);
+                        new ProducerRecord<>(kafkaConfig.getTopic(), partitionKey, transaction);
 
                 producer.send(record, new Callback() {
                     @Override
@@ -83,7 +74,7 @@ public class MockTransactionProducer {
                             log.error("Failed to send transaction [txId={}]: {}", transaction.getTxId(), exception.getMessage());
                         } else {
                             String formattedAmount = CURRENCY_FORMAT.format(transaction.getAmount());
-                            if (transaction.getAmount() >= 10_000_000.0) {
+                            if (transaction.getAmount() >= genConfig.getHighAmountThreshold()) {
                                 log.warn("🚨 [PRODUCED - FDS TARGET] txId={}, sender={}, receiver={}, amount={} {}, partition={}, offset={}",
                                         transaction.getTxId(), transaction.getSenderAccount(), transaction.getReceiverAccount(),
                                         formattedAmount, transaction.getCurrency(), metadata.partition(), metadata.offset());
@@ -97,12 +88,11 @@ public class MockTransactionProducer {
                 });
 
                 count++;
-                if (count % 10 == 0) {
+                if (count % kafkaConfig.getFlushInterval() == 0) {
                     producer.flush();
                 }
 
-                // 1초 주기로 전송 (터미널 모니터링 최적화)
-                Thread.sleep(1000);
+                Thread.sleep(genConfig.getIntervalMs());
             }
         } catch (InterruptedException e) {
             log.info("Producer loop interrupted.");
@@ -115,25 +105,24 @@ public class MockTransactionProducer {
         }
     }
 
-    private static Pacs008Transaction generateMockTransaction() {
-        int senderIdx = RANDOM.nextInt(ACCOUNTS.size());
+    private static Pacs008Transaction generateMockTransaction(ProducerAppConfig.GeneratorConfig genConfig) {
+        List<String> accounts = genConfig.getAccounts();
+        int senderIdx = RANDOM.nextInt(accounts.size());
         int receiverIdx;
         do {
-            receiverIdx = RANDOM.nextInt(ACCOUNTS.size());
+            receiverIdx = RANDOM.nextInt(accounts.size());
         } while (receiverIdx == senderIdx);
 
-        String sender = ACCOUNTS.get(senderIdx);
-        String receiver = ACCOUNTS.get(receiverIdx);
+        String sender = accounts.get(senderIdx);
+        String receiver = accounts.get(receiverIdx);
 
-        // 15% 확률로 1,000만 원 이상의 FDS 탐지 대상 고액 거래 발생
-        boolean isHighAmount = RANDOM.nextInt(100) < 15;
+        // 지정된 확률로 FDS 탐지 대상 고액 거래 발생
+        boolean isHighAmount = RANDOM.nextInt(100) < genConfig.getHighAmountProbabilityPercent();
         double amount;
         if (isHighAmount) {
-            // 1,000만 원 ~ 5,000만 원 (10만 원 단위)
-            amount = 10_000_000.0 + (RANDOM.nextInt(401) * 100_000.0);
+            amount = genConfig.getHighAmountBase() + (RANDOM.nextInt(genConfig.getHighAmountStepsCount()) * genConfig.getHighAmountStep());
         } else {
-            // 1만 원 ~ 100만 원 (1만 원 단위)
-            amount = 10_000.0 + (RANDOM.nextInt(100) * 10_000.0);
+            amount = genConfig.getNormalAmountBase() + (RANDOM.nextInt(genConfig.getNormalAmountStepsCount()) * genConfig.getNormalAmountStep());
         }
 
         String txId = UUID.randomUUID().toString();
@@ -146,7 +135,7 @@ public class MockTransactionProducer {
                 .setSenderAccount(sender)
                 .setReceiverAccount(receiver)
                 .setAmount(amount)
-                .setCurrency("KRW")
+                .setCurrency(genConfig.getCurrency())
                 .setIdempotencyKey(idempotencyKey)
                 .build();
     }

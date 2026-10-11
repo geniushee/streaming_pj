@@ -1,0 +1,35 @@
+kafka:
+  bootstrap-servers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"
+  topic: "${TOPIC_NAME:financial.transactions.raw}"
+  schema-registry-url: "${SCHEMA_REGISTRY_URL:http://localhost:8081}"
+  producer:
+    acks: "all"
+    enable-idempotence: true
+    retries: 3
+    linger-ms: 20
+    flush-interval: 10
+
+generator:
+  interval-ms: 1000
+  currency: "KRW"
+  high-amount-threshold: 10000000.0
+  high-amount-probability-percent: 15
+  high-amount:
+    base: 10000000.0
+    step: 100000.0
+    steps-count: 401
+  normal-amount:
+    base: 10000.0
+    step: 10000.0
+    steps-count: 100
+  accounts:
+    - "ACCT-KR-1001"
+    - "ACCT-KR-1002"
+    - "ACCT-KR-1003"
+    - "ACCT-KR-1004"
+    - "ACCT-KR-1005"
+    - "ACCT-KR-1006"
+    - "ACCT-KR-1007"
+    - "ACCT-KR-1008"
+    - "ACCT-KR-1009"
+    - "ACCT-KR-1010"

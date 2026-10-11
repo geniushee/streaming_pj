@@ -21,6 +21,11 @@ subprojects {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    dependencies {
+        implementation 'org.yaml:snakeyaml:2.2'
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    }
+
     tasks.withType(JavaCompile) {
         options.encoding = 'UTF-8'
     }

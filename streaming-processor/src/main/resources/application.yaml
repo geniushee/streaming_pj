@@ -1,0 +1,33 @@
+app:
+  job-name: "FinStream-FDS-and-Parquet-Pipeline"
+
+flink:
+  checkpoint:
+    interval-ms: 10000
+
+kafka:
+  bootstrap-servers: "${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}"
+  topic: "${TOPIC_NAME:financial.transactions.raw}"
+  group-id: "${KAFKA_GROUP_ID:finstream-core-group}"
+  schema-registry-url: "${SCHEMA_REGISTRY_URL:http://localhost:8081}"
+  source-name: "Kafka-ISO20022-Source"
+  watermark:
+    out-of-orderness-seconds: 5
+
+fds:
+  filter-name: "High-Amount-FDS-Filter"
+  alert-prefix: "🚨 [FDS ALERT - 이상 고액 이체 탐지]"
+  high-amount-threshold: 10000000.0
+
+storage:
+  s3:
+    endpoint: "${S3_ENDPOINT:http://localhost:9000}"
+    access-key: "${AWS_ACCESS_KEY_ID:admin}"
+    secret-key: "${AWS_SECRET_ACCESS_KEY:password123}"
+    path-style-access: true
+    impl: "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    credentials-provider: "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+  parquet:
+    sink-name: "MinIO-Parquet-Sink"
+    sink-path: "s3a://lakehouse/financial-transactions/"
+    bucket-format: "'year='yyyy/'month='MM/'day='dd/'hour='HH"
